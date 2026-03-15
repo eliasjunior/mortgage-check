@@ -1,0 +1,19 @@
+server:
+  port: 8080
+
+management:
+  endpoint:
+    health:
+      show-details: never
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+
+logging:
+  level:
+    root: WARN
+    com.mortgage: INFO
+  structured:
+    format:
+      console: ecs

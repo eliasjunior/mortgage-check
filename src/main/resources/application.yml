@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: mortgage-api
+  web:
+    resources:
+      add-mappings: false
+
+server:
+  port: 8080
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json
+    min-response-size: 1024
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    version: '@project.version@'
+    description: Mortgage Check REST API
+
+logging:
+  level:
+    root: INFO
+    com.mortgage: INFO
