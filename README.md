@@ -4,6 +4,18 @@ A REST API for mortgage feasibility checks and interest rate lookups, built with
 
 ---
 
+## Introduction
+
+This project was built with one guiding principle: **solve the problem clearly, nothing more**.
+
+The spec asked for two endpoints — a rate lookup and a mortgage feasibility check. Rather than reaching for patterns or abstractions that weren't yet justified, every decision was made in service of the requirements at hand. The result is a codebase that a new engineer can read top to bottom in under an hour and confidently change.
+
+**Readability and maintainability were treated as features.** The layering is deliberate — controllers handle HTTP, services own business logic, and the provider interface is the single seam where the data source can be swapped without touching anything else. `BigDecimal` was chosen over primitives because financial arithmetic demands it. Records signal immutability. Exceptions make failure paths explicit. Each choice has a clear reason behind it.
+
+**We also documented what we did not do.** Knowing the boundaries of an MVP is as important as knowing what it does. The [Known Evolution Points](#known-evolution-points) section captures the assumptions made, the shortcuts taken consciously, and the exact touch points that would need to change as the product grows — from the monthly cost formula to authentication to resilience patterns. A future engineer should never have to guess why something was left a certain way.
+
+---
+
 ## Quick Start
 
 **Prerequisites:** Java 21, Maven 3.8+
@@ -76,10 +88,10 @@ com.mortgage
 ### Key Design Principles
 
 - **Provider as first-class citizen** — `MortgageRateProvider` is the central seam. Nothing above it knows where rates come from. Swap the implementation without touching anything else.
-- **Interface-driven naming** — method names reflect the intent of their layer (`getRates()` at the provider, `findAllRates()` at the service). Same name across layers would be a smell.
+- **Interface-driven naming** — method names reflect the intent of their layer (`getRates()` at the provider, `findAllRates()` at the service).
 - **`BigDecimal` for all monetary values** — `double`/`float` cannot represent decimal fractions exactly. `BigDecimal` gives exact arithmetic with controlled rounding, which is required for financial calculations.
 - **Records for domain models** — immutable by default, no boilerplate, signal pure data.
-- **Throw, never return null** — `findByMaturityPeriod()` throws `MaturityPeriodNotFoundException` rather than returning null. Failure paths are explicit and typed.
+- **Throw exception** — `findByMaturityPeriod()` throws `MaturityPeriodNotFoundException` rather than returning null. Failure paths are explicit and typed.
 
 ---
 
@@ -220,3 +232,40 @@ Introduce a `controller/dto` package when:
 ### Resilience
 
 When the in-memory provider is replaced with an external service, add `@Cacheable` and a circuit breaker (Resilience4j) directly to the new provider implementation.
+
+### Security
+
+The code itself has no injection, deserialization, or path traversal risks. The gaps are at the infrastructure/config layer, expected for an MVP without auth wired yet.
+
+**High**
+- **No authentication/authorization** — all endpoints are open. When auth lands, protect routes via Spring Security (`oauth2ResourceServer` + JWT). `POST /api/mortgage-check` requires write scope; `GET /api/interest-rates` read scope.
+- **No rate limiting** — `POST /api/mortgage-check` is CPU work. Add throttling at the gateway or filter layer per client/IP to prevent DoS.
+- **`RootController` leaks app version** — `GET /` returns the exact version to any unauthenticated caller. Remove or put behind auth.
+
+**Medium**
+- **No `@DecimalMax` on financial inputs** — `loanValue`, `homeValue`, `income` are only validated as `@Positive`. Add a sane business ceiling via `@DecimalMax`.
+- **`maturityPeriod` has no `@Max`** — any positive integer passes validation and triggers a full list scan. Constrain to the real domain range (e.g. `@Min(1) @Max(30)`).
+- **No CORS policy** — Spring Boot defaults to allowing all origins. Define an explicit `CorsConfigurer` unless this is a pure server-to-server API enforced at the network layer.
+- **`metrics` actuator exposed in non-prod** — request rates and internal naming are visible. Restrict to internal network or require auth.
+
+**Low**
+- **No `consumes` on `POST`** — add `consumes = APPLICATION_JSON_VALUE` to make the contract explicit.
+- **`info` actuator enabled in prod** — exposes app name and version. Remove or restrict to internal network.
+
+**Auth skeleton (when ready)**
+```java
+@Bean
+SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    return http
+        .csrf(csrf -> csrf.disable())
+        .sessionManagement(s -> s.sessionCreationPolicy(STATELESS))
+        .authorizeHttpRequests(auth -> auth
+            .requestMatchers("/actuator/**").hasRole("ADMIN")
+            .requestMatchers(POST, "/api/mortgage-check").hasRole("USER")
+            .requestMatchers(GET,  "/api/interest-rates").hasRole("USER")
+            .anyRequest().authenticated()
+        )
+        .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+        .build();
+}
+```
