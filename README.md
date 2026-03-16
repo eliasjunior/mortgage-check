@@ -155,6 +155,33 @@ All errors follow [RFC 7807 Problem Details](https://www.rfc-editor.org/rfc/rfc7
 
 ---
 
+## Reachable Endpoints
+
+**Business API**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/interest-rates` | Returns all mortgage rates |
+| `POST` | `/api/mortgage-check` | Feasibility check |
+
+**Actuator**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/actuator` | Lists all actuator links |
+| `GET` | `/actuator/health` | `{"status":"UP"}` |
+| `GET` | `/actuator/info` | App name, version, description |
+| `GET` | `/actuator/metrics` | JVM, HTTP, disk, CPU metrics |
+| `GET` | `/actuator/metrics/{name}` | Single metric by name |
+
+**Root**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/` | App summary + endpoint index |
+
+---
+
 ## Business Rules
 
 - A mortgage should not exceed **4 times the income**
